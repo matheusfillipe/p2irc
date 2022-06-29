@@ -20,11 +20,17 @@ import (
 )
 
 const (
-	MAX_LEN          = 400
-	INDEX_HTML       = "index.html"
-	PASTEBIN_URL     = "http://ix.io"
-	TIMEOUT          = 10
-	MAX_PER_MINUTE   = 2
+	// If the sent message has more characters than that it will be pasted to ix.io
+	MAX_LEN = 400
+	// HTML file to responde on get request
+	INDEX_HTML = "index.html"
+	// URL to paste to ix.io
+	PASTEBIN_URL = "http://ix.io"
+	// If this timeout is reached (seconds) while connecting to the irc, the program will exit
+	TIMEOUT = 10
+	// IP rate limiting. If set to 0 will be ignored
+	MAX_PER_MINUTE = 2
+	// You don't have to care about this if not using ip limiting
 	REDIS_ADDR       = "localhost:6379"
 	REDIS_KEY_PREFIX = "sendirc_"
 )
@@ -116,12 +122,9 @@ func Timeout[R any](timeout int, f func() R) (R, bool) {
 	}
 }
 
-func ircSend(server string, channel string, message string) {
-	conn, err := net.Dial("tcp", server)
-	if err != nil {
-		fmt.Printf("Failed to connect to that irc server!")
-		return
-	}
+func ircSend(conn net.Conn, server string, channel string, message string) {
+	// Make sure not to send line breaks
+	message = strings.Replace(message, "\n", "", -1)
 
 	config := irc.ClientConfig{
 		Nick: "sendirc_bot",
@@ -148,7 +151,7 @@ func ircSend(server string, channel string, message string) {
 
 	// Create the client
 	client := irc.NewClient(conn, config)
-	err = client.Run()
+  err := client.Run()
 	if err != nil {
 		fmt.Printf("Failed to connect to that irc server!")
 		return
@@ -163,6 +166,10 @@ func errMessage() {
 }
 
 func rate_limit_apply(request RequestParam) bool {
+	if MAX_PER_MINUTE == 0 {
+		return true
+	}
+
 	// Check if we have reached the limit per minute for the address
 	var ctx = context.Background()
 	rdb := redis.NewClient(&redis.Options{
@@ -216,12 +223,9 @@ func main() {
 		}
 	}
 
-	if !rate_limit_apply(request) {
-		return
-	}
-
 	server := ""
 	channel := ""
+
 	switch len(request.path) {
 	case 0:
 		server = DEFAULT[0]
@@ -241,10 +245,21 @@ func main() {
 		errMessage()
 		return
 	}
+
 	fmt.Printf("Sending to %s at #%s\n", server, channel)
 
+	conn, err := net.Dial("tcp", server)
+	if err != nil {
+		fmt.Printf("Failed to connect to that irc server!")
+		return
+	}
+
+	if !rate_limit_apply(request) {
+		return
+	}
+
 	Timeout(TIMEOUT, func() bool {
-		ircSend(server, channel, message)
+		ircSend(conn, server, channel, message)
 		return true
 	})
 }
