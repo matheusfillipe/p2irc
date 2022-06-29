@@ -20,12 +20,14 @@ const (
 	MAX_LEN      = 400
 	INDEX_HTML   = "index.html"
 	PASTEBIN_URL = "http://ix.io"
-  TIMEOUT = 10
-  )
+	TIMEOUT      = 10
+)
+
+var DEFAULT = []string{"irc.dot.org.es:6667", "romanian"}
 var SHORTCUTS = map[string][]string{
-    "linux": {"irc.libera.chat:6667", "linux"},
-  "ro": {"irc.dot.org.es:6667", "romanian"},
-  }
+	"linux": {"irc.libera.chat:6667", "linux"},
+	"ro":    DEFAULT,
+}
 
 type RequestParam struct {
 	method string
@@ -34,9 +36,15 @@ type RequestParam struct {
 }
 
 func getRequest() RequestParam {
+	var path []string
+	for _, p := range strings.Split(strings.TrimPrefix(os.Getenv("REQUEST_URI"), "/"), "/") {
+		if len(p) > 0 {
+			path = append(path, p)
+		}
+	}
 	return RequestParam{
 		method: os.Getenv("REQUEST_METHOD"),
-		path:   strings.Split(strings.TrimPrefix(os.Getenv("REQUEST_URI"), "/"), "/"),
+		path:   path,
 	}
 }
 
@@ -139,6 +147,13 @@ func ircSend(server string, channel string, message string) {
 	}
 }
 
+func errMessage() {
+	fmt.Printf("Invalid request\nUsage example: cat /etc/pulse/default.pa | curl -d @- sendirc.tk/irc.dot.org.es:6667/romanian\nAvailable shortcuts are: ")
+	for k, v := range SHORTCUTS {
+		fmt.Printf("%s: %s\n", k, strings.Join(v, ", "))
+	}
+}
+
 func main() {
 	request := getRequest()
 	fmt.Printf("Content-Type: text/html\n\n\n")
@@ -149,8 +164,9 @@ func main() {
 	}
 
 	// fmt.Printf("%+v\n", request)
-	// fmt.Print("---\n", body)
 	message := getBody()
+	// fmt.Print("---\n", message)
+	// return
 	if len(message) > MAX_LEN {
 		var ok = true
 		message, ok = paste(message)
@@ -159,27 +175,29 @@ func main() {
 		}
 	}
 
-  server := ""
-  channel := ""
-  switch len(request.path) {
-  case 1:
-    if _, ok := SHORTCUTS[request.path[0]]; ok {
-      server = SHORTCUTS[request.path[0]][0]
-      channel = SHORTCUTS[request.path[0]][1]
-    } else {
-      fmt.Printf("Invalid request\nUsage example: cat /etc/pulse/default.pa | curl -d @- sendirc.tk/irc.dot.org.es:6667/romanian\nAvailable shortcuts are: ")
-        return
-    }
-  case 2:
-      server = request.path[0]
-      channel = request.path[1]
-  default:
-      fmt.Printf("Invalid request\nUsage example: cat /etc/pulse/default.pa | curl -d @- sendirc.tk/irc.dot.org.es:6667/romanian\nAvailable shortcuts are: ")
-      for k, v := range SHORTCUTS {
-        fmt.Printf("%s: %s\n", k, strings.Join(v, ", "))
-      }
-        return
-  }
+	server := ""
+	channel := ""
+	fmt.Printf("Request: %+v", request.path)
+	fmt.Printf("Request: %+v", len(request.path))
+	switch len(request.path) {
+	case 0:
+		server = DEFAULT[0]
+		channel = DEFAULT[1]
+	case 1:
+		if _, ok := SHORTCUTS[request.path[0]]; ok {
+			server = SHORTCUTS[request.path[0]][0]
+			channel = SHORTCUTS[request.path[0]][1]
+		} else {
+			errMessage()
+			return
+		}
+	case 2:
+		server = request.path[0]
+		channel = request.path[1]
+	default:
+		errMessage()
+		return
+	}
 	fmt.Printf("Sending to %s at #%s\n", server, channel)
 
 	Timeout(TIMEOUT, func() bool {
