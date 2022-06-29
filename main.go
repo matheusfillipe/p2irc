@@ -194,6 +194,8 @@ func rate_limit_apply(request RequestParam) bool {
 		count, _ := strconv.Atoi(val)
 		if count >= MAX_PER_MINUTE {
 			fmt.Printf("You have reached the limit of messages per minute. Please try again later.")
+      // renew it on redis
+      rdb.Set(ctx, key, count, time.Minute)
 			return false
 		}
 		// Increment counter
