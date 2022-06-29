@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,17 +11,22 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"gopkg.in/irc.v3"
 )
 
 const (
-	MAX_LEN      = 400
-	INDEX_HTML   = "index.html"
-	PASTEBIN_URL = "http://ix.io"
-	TIMEOUT      = 10
+	MAX_LEN          = 400
+	INDEX_HTML       = "index.html"
+	PASTEBIN_URL     = "http://ix.io"
+	TIMEOUT          = 10
+	MAX_PER_MINUTE   = 2
+	REDIS_ADDR       = "localhost:6379"
+	REDIS_KEY_PREFIX = "sendirc_"
 )
 
 var DEFAULT = []string{"irc.dot.org.es:6667", "romanian"}
@@ -30,9 +36,10 @@ var SHORTCUTS = map[string][]string{
 }
 
 type RequestParam struct {
-	method string
-	path   []string
-	query  string
+	method     string
+	path       []string
+	query      string
+	remoteAddr string
 }
 
 func getRequest() RequestParam {
@@ -43,8 +50,9 @@ func getRequest() RequestParam {
 		}
 	}
 	return RequestParam{
-		method: os.Getenv("REQUEST_METHOD"),
-		path:   path,
+		method:     os.Getenv("REQUEST_METHOD"),
+		path:       path,
+		remoteAddr: os.Getenv("REMOTE_ADDR"),
 	}
 }
 
@@ -154,6 +162,42 @@ func errMessage() {
 	}
 }
 
+func rate_limit_apply(request RequestParam) bool {
+	// Check if we have reached the limit per minute for the address
+	var ctx = context.Background()
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     REDIS_ADDR,
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
+	key := REDIS_KEY_PREFIX + request.remoteAddr
+
+	val, err := rdb.Get(ctx, key).Result()
+	if err == redis.Nil {
+		// Key does not exist
+		rdb.Set(ctx, key, 1, time.Minute)
+
+	} else if err != nil {
+		fmt.Printf("Error acessing database")
+		return false
+
+	} else {
+		// Key exists, check if we have reached the limit
+		count, _ := strconv.Atoi(val)
+		if count >= MAX_PER_MINUTE {
+			fmt.Printf("You have reached the limit of messages per minute. Please try again later.")
+			return false
+		}
+		// Increment counter
+		count += 1
+		rdb.Set(ctx, key, count, time.Minute)
+	}
+
+	return true
+
+}
+
 func main() {
 	request := getRequest()
 	fmt.Printf("Content-Type: text/html\n\n\n")
@@ -163,10 +207,7 @@ func main() {
 		return
 	}
 
-	// fmt.Printf("%+v\n", request)
 	message := getBody()
-	// fmt.Print("---\n", message)
-	// return
 	if len(message) > MAX_LEN {
 		var ok = true
 		message, ok = paste(message)
@@ -175,10 +216,12 @@ func main() {
 		}
 	}
 
+	if !rate_limit_apply(request) {
+		return
+	}
+
 	server := ""
 	channel := ""
-	fmt.Printf("Request: %+v", request.path)
-	fmt.Printf("Request: %+v", len(request.path))
 	switch len(request.path) {
 	case 0:
 		server = DEFAULT[0]

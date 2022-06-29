@@ -2,4 +2,12 @@ module github.com/matheusfillipe/sendirc
 
 go 1.18
 
-require gopkg.in/irc.v3 v3.1.4 // indirect
+require (
+	github.com/go-redis/redis/v8 v8.11.5
+	gopkg.in/irc.v3 v3.1.4
+)
+
+require (
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+)
