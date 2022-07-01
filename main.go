@@ -20,6 +20,7 @@ import (
 )
 
 const (
+  SITENAME = "p2ir.cf"
 	// If the sent message has more characters than that it will be pasted to ix.io
 	MAX_LEN = 400
 	// HTML file to responde on get request
@@ -127,9 +128,9 @@ func ircSend(conn net.Conn, server string, channel string, message string) {
 	message = strings.Replace(message, "\n", "", -1)
 
 	config := irc.ClientConfig{
-		Nick: "sendirc_bot",
-		User: "sendirc.tk",
-		Name: "sendirc.tk",
+		Nick: SITENAME,
+		User: SITENAME,
+		Name: SITENAME,
 		Handler: irc.HandlerFunc(func(c *irc.Client, m *irc.Message) {
 			if m.Command == "001" {
 				// 001 is a welcome event, so we join channels there
@@ -159,7 +160,7 @@ func ircSend(conn net.Conn, server string, channel string, message string) {
 }
 
 func errMessage() {
-	fmt.Printf("Invalid request\nUsage example: cat /etc/pulse/default.pa | curl -d @- sendirc.tk/irc.dot.org.es:6667/romanian\nAvailable shortcuts are: ")
+	fmt.Printf("Invalid request\nUsage example: cat /etc/pulse/default.pa | curl --data-binary @- " + SITENAME + "/irc.dot.org.es:6667/romanian\nAvailable shortcuts are: ")
 	for k, v := range SHORTCUTS {
 		fmt.Printf("%s: %s\n", k, strings.Join(v, ", "))
 	}
