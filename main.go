@@ -21,16 +21,12 @@ import (
 
 const (
 	SITENAME = "p2irc"
-	// If the sent message has more characters than that it will be pasted to ix.io
-	MAX_LEN = 400
 	// HTML file to responde on get request
 	INDEX_HTML = "index.html"
-	// URL to paste to ix.io
-	PASTEBIN_URL = "http://ix.io"
 	// If this timeout is reached (seconds) while connecting to the irc, the program will exit
 	TIMEOUT = 10
 	// IP rate limiting. If set to 0 will be ignored
-	MAX_PER_MINUTE = 20
+	MAX_PER_MINUTE = 2
 	// You don't have to care about this if not using ip limiting
 	REDIS_ADDR       = "localhost:6379"
 	REDIS_KEY_PREFIX = "sendirc_"
@@ -75,30 +71,6 @@ func sendHTMLFile(file string) {
 	for scanner.Scan() {
 		fmt.Println(scanner.Text())
 	}
-}
-
-// Paste to ix.io and get url
-func paste(doc string) (string, bool) {
-	// Create payload form
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	part, _ := writer.CreateFormField("f:1")
-	io.Copy(part, strings.NewReader(doc))
-	writer.Close()
-
-	req, _ := http.NewRequest("POST", PASTEBIN_URL, body)
-	req.Header.Add("Content-Type", writer.FormDataContentType())
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "Sorry but an error occured: " + err.Error(), false
-	}
-	defer resp.Body.Close()
-
-	rbody, _ := ioutil.ReadAll(resp.Body)
-	return string(rbody), true
 }
 
 // Run a function and return nil, false if it timeouts. otherwise returns f(), true
@@ -226,13 +198,6 @@ func main() {
 
 	message := getBody()
   fmt.Println("message: " + message)
-	if len(message) > MAX_LEN {
-		var ok = true
-		message, ok = paste(message)
-		if !ok {
-			return
-		}
-	}
 
 	server := ""
 	channel := ""
