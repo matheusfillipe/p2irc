@@ -20,7 +20,7 @@ import (
 )
 
 const (
-  SITENAME = "p2ir.cf"
+	SITENAME = "p2irc"
 	// If the sent message has more characters than that it will be pasted to ix.io
 	MAX_LEN = 400
 	// HTML file to responde on get request
@@ -132,6 +132,7 @@ func ircSend(conn net.Conn, server string, channel string, message string) {
 		User: SITENAME,
 		Name: SITENAME,
 		Handler: irc.HandlerFunc(func(c *irc.Client, m *irc.Message) {
+      fmt.Println(m)
 			if m.Command == "001" {
 				// 001 is a welcome event, so we join channels there
 				c.Write("JOIN #" + channel)
@@ -152,7 +153,7 @@ func ircSend(conn net.Conn, server string, channel string, message string) {
 
 	// Create the client
 	client := irc.NewClient(conn, config)
-  err := client.Run()
+	err := client.Run()
 	if err != nil {
 		fmt.Printf("Failed to connect to that irc server!")
 		return
@@ -195,8 +196,8 @@ func rate_limit_apply(request RequestParam) bool {
 		count, _ := strconv.Atoi(val)
 		if count >= MAX_PER_MINUTE {
 			fmt.Printf("You have reached the limit of messages per minute. Please try again later.")
-      // renew it on redis
-      rdb.Set(ctx, key, count, time.Minute)
+			// renew it on redis
+			rdb.Set(ctx, key, count, time.Minute)
 			return false
 		}
 		// Increment counter
@@ -249,6 +250,11 @@ func main() {
 		return
 	}
 
+	// If server doesn't end with :port_number, default to :6667
+	if !strings.Contains(server, ":") {
+		server += ":6667"
+	}
+
 	fmt.Printf("Sending to %s at #%s\n", server, channel)
 
 	conn, err := net.Dial("tcp", server)
@@ -261,8 +267,11 @@ func main() {
 		return
 	}
 
-	Timeout(TIMEOUT, func() bool {
+	_, ok := Timeout(TIMEOUT, func() bool {
 		ircSend(conn, server, channel, message)
 		return true
 	})
+	if !ok {
+		fmt.Printf("Timeout sending message. Please try again later.")
+	}
 }
