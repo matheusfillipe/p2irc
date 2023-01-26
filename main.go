@@ -132,22 +132,25 @@ func ircSend(conn net.Conn, server string, channel string, message string) {
 		User: SITENAME,
 		Name: SITENAME,
 		Handler: irc.HandlerFunc(func(c *irc.Client, m *irc.Message) {
-      fmt.Println(m)
+			fmt.Println(m)
 			if m.Command == "001" {
 				// 001 is a welcome event, so we join channels there
+				if channel[0] == '-' {
+          c.Write("PRIVMSG " + channel[1:] + " :" + message)
+				}
 				c.Write("JOIN #" + channel)
 			} else if m.Command == "JOIN" && c.FromChannel(m) {
-				c.WriteMessage(&irc.Message{
-					Command: "PRIVMSG",
-					Params: []string{
-						m.Params[0],
-						message,
-					},
-				})
-				conn.Close()
-				fmt.Printf("Sent successfully!\n")
-				// exit program
-				os.Exit(0)
+        c.WriteMessage(&irc.Message{
+          Command: "PRIVMSG",
+          Params: []string{
+            m.Params[0],
+            message,
+          },
+        })
+        conn.Close()
+        fmt.Printf("Sent successfully!\n")
+        // exit program
+        os.Exit(0)
 			}
 		})}
 
@@ -229,6 +232,8 @@ func main() {
 
 	server := ""
 	channel := ""
+
+  fmt.Println(request.path)
 
 	switch len(request.path) {
 	case 0:
