@@ -30,7 +30,7 @@ const (
 	// If this timeout is reached (seconds) while connecting to the irc, the program will exit
 	TIMEOUT = 10
 	// IP rate limiting. If set to 0 will be ignored
-	MAX_PER_MINUTE = 2
+	MAX_PER_MINUTE = 20
 	// You don't have to care about this if not using ip limiting
 	REDIS_ADDR       = "localhost:6379"
 	REDIS_KEY_PREFIX = "sendirc_"
@@ -124,8 +124,7 @@ func Timeout[R any](timeout int, f func() R) (R, bool) {
 }
 
 func ircSend(conn net.Conn, server string, channel string, message string) {
-	// Make sure not to send line breaks
-	message = strings.Replace(message, "\n", "", -1)
+	messages := strings.Split(message, "\n")
 
 	config := irc.ClientConfig{
 		Nick: SITENAME,
@@ -136,21 +135,25 @@ func ircSend(conn net.Conn, server string, channel string, message string) {
 			if m.Command == "001" {
 				// 001 is a welcome event, so we join channels there
 				if channel[0] == '-' {
-          c.Write("PRIVMSG " + channel[1:] + " :" + message)
+					for _, msg := range messages {
+						c.Write("PRIVMSG " + channel[1:] + " :" + msg)
+					}
 				}
 				c.Write("JOIN #" + channel)
 			} else if m.Command == "JOIN" && c.FromChannel(m) {
-        c.WriteMessage(&irc.Message{
-          Command: "PRIVMSG",
-          Params: []string{
-            m.Params[0],
-            message,
-          },
-        })
-        conn.Close()
-        fmt.Printf("Sent successfully!\n")
-        // exit program
-        os.Exit(0)
+				for _, msg := range messages {
+					c.WriteMessage(&irc.Message{
+						Command: "PRIVMSG",
+						Params: []string{
+							m.Params[0],
+							msg,
+						},
+					})
+				}
+				conn.Close()
+				fmt.Printf("Sent successfully!\n")
+				// exit program
+				os.Exit(0)
 			}
 		})}
 
@@ -222,6 +225,7 @@ func main() {
 	}
 
 	message := getBody()
+  fmt.Println("message: " + message)
 	if len(message) > MAX_LEN {
 		var ok = true
 		message, ok = paste(message)
@@ -232,8 +236,6 @@ func main() {
 
 	server := ""
 	channel := ""
-
-  fmt.Println(request.path)
 
 	switch len(request.path) {
 	case 0:

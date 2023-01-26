@@ -10,5 +10,8 @@
 <br><br>
 <p>Do not put # on the room name</p>
 <p>Use '-' to send a private message e.g.</p>
-<code>echo "hey greg" | curl --data-binary @- p2ir.cf/isr.server.com/-greg</code>
+<code>echo "hey greg" | curl -d @- p2ir.cf/isr.server.com/-greg</code>
+<p>To send multiple lines use --data-binary curl argument</p>
+<code>printf "hey greg\nhow are you\nbye" | curl --data-binary @- p2ir.cf/isr.server.com/-greg</code>
+<br><br>
 <a hred="https://github.com/matheusfillipe/p2irc">https://github.com/matheusfillipe/p2irc</a>
