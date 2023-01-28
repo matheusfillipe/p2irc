@@ -2,14 +2,10 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"mime/multipart"
 	"net"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -39,10 +35,12 @@ var SHORTCUTS = map[string][]string{
 }
 
 type RequestParam struct {
-	method     string
-	path       []string
-	query      string
-	remoteAddr string
+	method       string
+	path         []string
+	query        string
+	remoteAddr   string
+	nick         string
+	content_type string
 }
 
 func getRequest() RequestParam {
@@ -52,10 +50,17 @@ func getRequest() RequestParam {
 			path = append(path, p)
 		}
 	}
+
+	nick := strings.TrimSpace(os.Getenv("HTTP_NICK"))
+	if len(nick) == 0 {
+		nick = SITENAME
+	}
 	return RequestParam{
-		method:     os.Getenv("REQUEST_METHOD"),
-		path:       path,
-		remoteAddr: os.Getenv("REMOTE_ADDR"),
+		method:       os.Getenv("REQUEST_METHOD"),
+		path:         path,
+		remoteAddr:   os.Getenv("REMOTE_ADDR"),
+		nick:         nick,
+		content_type: os.Getenv("HTTP_CONTENT_TYPE"),
 	}
 }
 
@@ -95,11 +100,11 @@ func Timeout[R any](timeout int, f func() R) (R, bool) {
 	}
 }
 
-func ircSend(conn net.Conn, server string, channel string, message string) {
+func ircSend(conn net.Conn, server string, channel string, message string, nick string) {
 	messages := strings.Split(message, "\n")
 
 	config := irc.ClientConfig{
-		Nick: SITENAME,
+		Nick: nick,
 		User: SITENAME,
 		Name: SITENAME,
 		Handler: irc.HandlerFunc(func(c *irc.Client, m *irc.Message) {
@@ -196,8 +201,13 @@ func main() {
 		return
 	}
 
+	if request.method != "POST" {
+		errMessage()
+		return
+	}
+
 	message := getBody()
-  fmt.Println("message: " + message)
+	fmt.Println("message: " + message)
 
 	server := ""
 	channel := ""
@@ -240,7 +250,7 @@ func main() {
 	}
 
 	_, ok := Timeout(TIMEOUT, func() bool {
-		ircSend(conn, server, channel, message)
+		ircSend(conn, server, channel, message, request.nick)
 		return true
 	})
 	if !ok {

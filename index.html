@@ -4,14 +4,16 @@
 
 <br>
 
-<h1>For multiline (files, etc)</h1>
-<h2>cat file | curl --data-binary @- p2ir.cf/ro</h2>
+<h1>For multiline (files, spam, etc)</h1>
+<h2>cat file | curl --data-binary @- p2ir.cf/irc.server/room</h2>
 
 <br><br>
 <p>Do not put # on the room name</p>
 <p>Use '-' to send a private message e.g.</p>
-<code>echo "hey greg" | curl -d @- p2ir.cf/isr.server.com/-greg</code>
+<code>echo "hey greg" | curl -d @- p2ir.cf/irc.server.com/-greg</code>
 <p>To send multiple lines use --data-binary curl argument</p>
-<code>printf "hey greg\nhow are you\nbye" | curl --data-binary @- p2ir.cf/isr.server.com/-greg</code>
+<code>printf "hey greg\nhow are you\nbye" | curl --data-binary @- p2ir.cf/irc.server.com/room</code>
+<p>If you want another nick set the header</p>
+<code>printf "hey greg\nhow are you\nbye" | curl -H "NICK: samuel" --data-binary @- p2ir.cf/irc.server.com/room</code>
 <br><br>
-<a hred="https://github.com/matheusfillipe/p2irc">https://github.com/matheusfillipe/p2irc</a>
+<p>For more info and for using this on github webhooks take a look at <a hred="https://github.com/matheusfillipe/p2irc">https://github.com/matheusfillipe/p2irc</a></p>
