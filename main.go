@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -26,12 +27,38 @@ const (
 	// You don't have to care about this if not using ip limiting
 	REDIS_ADDR       = "localhost:6379"
 	REDIS_KEY_PREFIX = "sendirc_"
+
+	// Defautl nick for github webhooks
+	WEBHOOK_NICK = "github"
 )
 
-var DEFAULT = []string{"irc.dot.org.es:6667", "romanian"}
-var SHORTCUTS = map[string][]string{
-	"linux": {"irc.libera.chat:6667", "linux"},
-	"ro":    DEFAULT,
+var (
+	DEFAULT   = []string{"irc.dot.org.es:6667", "romanian"}
+	SHORTCUTS = map[string][]string{
+		"linux": {"irc.libera.chat:6667", "linux"},
+		"ro":    DEFAULT,
+	}
+	WEBHOOK_TEMPLATES = [...]WebHookTemplate{
+		{
+			Ref:    "refs/heads/",
+			Format: "----------------------------------------------\n--> \x02%s \x02received a commit from \x1d%s \x1d\"%s\"\n--> %s",
+			Paths:  []string{"repository.name", "sender.login", "head_commit.message", "repository.url"},
+		},
+		{
+			Ref:    "refs/tags/v",
+			Format: "---------------------------------------------\n--> \x02%s\x02 version \x02%s\x02 was just released by \x1d%s\x1d\n--> %s",
+			Paths:  []string{"repository.name", "self", "sender.login", "repository.url"},
+		},
+	}
+)
+
+type WebHookTemplate struct {
+	// template ref name that matches the webhook refs (/refs/heads/ or /refs/tags/)
+	Ref string
+	// Template formate string
+	Format string
+	// Template paths like repository.url
+	Paths []string
 }
 
 type RequestParam struct {
@@ -52,21 +79,68 @@ func getRequest() RequestParam {
 	}
 
 	nick := strings.TrimSpace(os.Getenv("HTTP_NICK"))
-	if len(nick) == 0 {
-		nick = SITENAME
-	}
 	return RequestParam{
 		method:       os.Getenv("REQUEST_METHOD"),
 		path:         path,
 		remoteAddr:   os.Getenv("REMOTE_ADDR"),
 		nick:         nick,
-		content_type: os.Getenv("HTTP_CONTENT_TYPE"),
+		content_type: strings.ToLower(os.Getenv("HTTP_CONTENT_TYPE")),
 	}
 }
 
 func getBody() string {
 	body, _ := ioutil.ReadAll(os.Stdin)
 	return string(body)
+}
+
+// / Parse the request as a json from github webhooks and returns formated message
+func parseWebhook() string {
+	decoder := json.NewDecoder(os.Stdin)
+	var t map[string]interface{}
+	err := decoder.Decode(&t)
+	if err != nil {
+		fmt.Printf("Failed to parse json: %s", err)
+		// exit program
+		os.Exit(0)
+	}
+	fmt.Println("Webhook detected")
+	// template matching
+	for _, template := range WEBHOOK_TEMPLATES {
+		// If webhook ref starts with template ref
+		if strings.Index(t["ref"].(string), template.Ref) == 0 {
+			fmt.Printf("Template matched to %s\n", template.Ref)
+			var elements []any
+			for _, path := range template.Paths {
+				// Loop over path split by . and get the value, exclude the last one
+				keys := strings.Split(path, ".")
+				prop := keys[len(keys)-1]
+				value := ""
+				if prop == "self" {
+					fmt.Printf("Self\n")
+					ref := strings.Split(t["ref"].(string), "/")
+					fmt.Printf("ref: %s\n", ref)
+					value = ref[len(ref)-1]
+				} else {
+					// Clone the map
+					dict := make(map[string]interface{})
+					for k, v := range t {
+						dict[k] = v
+					}
+					for _, p := range keys[:len(keys)-1] {
+						fmt.Printf("Path: %s\n", p)
+						dict = dict[p].(map[string]interface{})
+					}
+					value = dict[prop].(string)
+				}
+				fmt.Printf("Value: %s\n", value)
+				elements = append(elements, value)
+			}
+			return fmt.Sprintf(template.Format, elements...)
+		}
+	}
+	fmt.Printf("No template matched for webhook")
+	os.Exit(0)
+	return ""
 }
 
 func sendHTMLFile(file string) {
@@ -206,8 +280,18 @@ func main() {
 		return
 	}
 
-	message := getBody()
-	fmt.Println("message: " + message)
+	message := ""
+	if request.content_type == "application/json" {
+		message = parseWebhook()
+		if request.nick == "" {
+			request.nick = WEBHOOK_NICK
+		}
+	} else {
+		message = getBody()
+		if request.nick == "" {
+			request.nick = SITENAME
+		}
+	}
 
 	server := ""
 	channel := ""
@@ -256,4 +340,8 @@ func main() {
 	if !ok {
 		fmt.Printf("Timeout sending message. Please try again later.")
 	}
+}
+
+func getWebhookMessage() {
+	panic("unimplemented")
 }
